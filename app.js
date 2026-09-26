@@ -86,45 +86,18 @@
   }
   function errMsg(e) {
     const m = (e && (e.message || e.error_description)) || "Error desconocido";
-    if (/row-level security|permission denied/i.test(m)) return "Tu email no está autorizado para esta acción.";
+    if (/row-level security|permission denied/i.test(m)) return "Supabase rechazó la operación (permisos RLS).";
     if (/duplicate key/i.test(m)) return "Ese cliente ya existe.";
     return m;
   }
 
-  // ---------------- Sesión ----------------
-  async function start() {
-    if (!hasSupabase) return boot();
-    const { data } = await sb.auth.getSession();
-    if (data.session) boot(); else showLogin();
-    sb.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session) boot();
-      if (event === "SIGNED_OUT") showLogin();
-    });
-  }
-  function showLogin() {
-    $("login").classList.remove("hidden");
-    ["report", "empty", "demoBanner"].forEach((id) => $(id).classList.add("hidden"));
-    $("clientBox").classList.add("hidden");
-    $("openEdit").classList.add("hidden");
-    $("logout").classList.add("hidden");
-  }
-  $("loginBtn").onclick = async () => {
-    const email = $("loginEmail").value.trim();
-    if (!email) { $("loginMsg").textContent = "Escribe tu email."; return; }
-    $("loginBtn").disabled = true; $("loginMsg").textContent = "Enviando…";
-    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
-    $("loginBtn").disabled = false;
-    $("loginMsg").textContent = error ? "No se pudo enviar: " + error.message : "Revisa tu correo y abre el enlace de acceso.";
-  };
-  $("logout").onclick = async () => { await sb.auth.signOut(); };
+  async function start() { boot(); }
 
   let booted = false;
   function showError(msg) { $("errorText").textContent = msg; $("errorBox").classList.remove("hidden"); }
   async function boot() {
-    $("login").classList.add("hidden");
     $("clientBox").classList.remove("hidden");
     $("openEdit").classList.remove("hidden");
-    $("logout").classList.toggle("hidden", !hasSupabase);
     $("clienteNombre").textContent = CLIENT_NAME;
     document.title = "Funnel · " + CLIENT_NAME;
     if (booted) return; booted = true;
@@ -136,7 +109,7 @@
     } catch (e) {
       clienteId = null;
       showError("No se pudo cargar el cliente " + CLIENT_NAME + ": " + errMsg(e) +
-        (hasSupabase ? " Verifica que tu email esté en la tabla usuarios_permitidos de Supabase." : ""));
+        (hasSupabase ? " Verifica que ejecutaste supabase/schema.sql y que existe el cliente en la tabla clientes." : ""));
     }
     await loadMetricas();
   }
