@@ -5,11 +5,9 @@
 
   const FIELDS = ["p_base","p_descalificados","p_contactados","p_emails","p_llamadas","p_conectadas","p_abiertos","p_respondieron","p_agendadas","p_realizadas","p_meta","n_enviados","n_abiertos","n_clics","n_respuestas","n_reuniones","n_bajas"];
   const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-  const LAST_CLIENT_KEY = "dano_funnel_cliente";
   const $ = (id) => document.getElementById(id);
 
   let store = {};      // { "2026-08": {campos...} } del cliente activo
-  let clientes = [];   // [{id, nombre}]
   let clienteId = null;
   let demo = null;
   let chart = null;
@@ -25,6 +23,7 @@
 
   // ---------------- Capa de datos ----------------
   const cfg = window.APP_CONFIG || {};
+  const CLIENT_NAME = (cfg.CLIENT_NAME || "AWKI USA").trim();
   const hasSupabase = !!(cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY && window.supabase);
   const sb = hasSupabase ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY) : null;
 
@@ -120,58 +119,29 @@
   $("logout").onclick = async () => { await sb.auth.signOut(); };
 
   let booted = false;
+  function showError(msg) { $("errorText").textContent = msg; $("errorBox").classList.remove("hidden"); }
   async function boot() {
     $("login").classList.add("hidden");
     $("clientBox").classList.remove("hidden");
     $("openEdit").classList.remove("hidden");
     $("logout").classList.toggle("hidden", !hasSupabase);
+    $("clienteNombre").textContent = CLIENT_NAME;
+    document.title = "Funnel · " + CLIENT_NAME;
     if (booted) return; booted = true;
     try {
-      clientes = await api.listClientes();
-    } catch (e) { toast(errMsg(e)); clientes = []; }
-    if (!clientes.length) {
-      try { clientes = [await api.crearCliente("Cliente")]; } catch (e) { toast(errMsg(e)); }
+      const list = await api.listClientes();
+      let c = list.find((x) => x.nombre.trim().toLowerCase() === CLIENT_NAME.toLowerCase());
+      if (!c) c = await api.crearCliente(CLIENT_NAME);
+      clienteId = c.id;
+    } catch (e) {
+      clienteId = null;
+      showError("No se pudo cargar el cliente " + CLIENT_NAME + ": " + errMsg(e) +
+        (hasSupabase ? " Verifica que tu email esté en la tabla usuarios_permitidos de Supabase." : ""));
     }
-    const last = localStorage.getItem(LAST_CLIENT_KEY);
-    clienteId = (clientes.find((c) => c.id === last) || clientes[0] || {}).id || null;
-    fillClientes();
     await loadMetricas();
   }
 
-  // ---------------- Clientes ----------------
-  function fillClientes() {
-    const sel = $("cliente");
-    sel.innerHTML = "";
-    clientes.forEach((c) => { const o = document.createElement("option"); o.value = c.id; o.textContent = c.nombre; sel.appendChild(o); });
-    if (clienteId) sel.value = clienteId;
-    document.title = "Funnel · " + (currentName() || "DANO Miami");
-  }
-  const currentName = () => (clientes.find((c) => c.id === clienteId) || {}).nombre || "";
-  $("cliente").onchange = async (e) => {
-    clienteId = e.target.value;
-    try { localStorage.setItem(LAST_CLIENT_KEY, clienteId); } catch (x) {}
-    demo = null; fillClientes(); await loadMetricas();
-  };
-  $("nuevoCliente").onclick = async () => {
-    const nombre = (prompt("Nombre del cliente") || "").trim();
-    if (!nombre) return;
-    try {
-      const c = await api.crearCliente(nombre);
-      clientes.push(c); clientes.sort((a, b) => a.nombre.localeCompare(b.nombre));
-      clienteId = c.id; try { localStorage.setItem(LAST_CLIENT_KEY, c.id); } catch (x) {}
-      fillClientes(); await loadMetricas();
-    } catch (e) { toast(errMsg(e)); }
-  };
-  $("renombrarCliente").onclick = async () => {
-    if (!clienteId) return;
-    const nombre = (prompt("Nuevo nombre del cliente", currentName()) || "").trim();
-    if (!nombre || nombre === currentName()) return;
-    try {
-      await api.renombrarCliente(clienteId, nombre);
-      clientes = clientes.map((c) => c.id === clienteId ? { ...c, nombre } : c);
-      fillClientes();
-    } catch (e) { toast(errMsg(e)); }
-  };
+  const currentName = () => CLIENT_NAME;
 
   async function loadMetricas() {
     if (!clienteId) { store = {}; return render(); }
@@ -396,7 +366,7 @@
 
   // ---------------- Formulario ----------------
   function openDrawer() {
-    if (!clienteId) { toast("Agrega un cliente primero."); return; }
+    if (!clienteId) { toast("El cliente no está disponible. Revisa el aviso en pantalla."); return; }
     demo = null;
     const d = store[$("month").value] || {};
     FIELDS.forEach((f) => { $(f).value = d[f] ?? ""; });

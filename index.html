@@ -123,6 +123,7 @@ legend{font-family:"Franie",Arial,sans-serif;font-weight:700;font-size:16px;marg
 .hidden{display:none!important}
 .client{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
 .client-label{font-size:14px;color:#D0D0D0}
+.client-name{font-family:"Franie",Arial,sans-serif;font-weight:700;font-size:20px;color:#fff}
 .client select{background:transparent;border:0;border-bottom:1px solid rgba(255,255,255,.4);color:#fff;font-family:"Franie",Arial,sans-serif;font-weight:700;font-size:20px;padding:2px 24px 2px 0;cursor:pointer;color-scheme:dark;max-width:100%}
 .client select option{background:#141414;color:#fff}
 .link-btn{background:none;border:0;color:#fff;text-decoration:underline;text-underline-offset:3px;cursor:pointer;font-size:14px;padding:4px}
@@ -149,7 +150,7 @@ legend{font-family:"Franie",Arial,sans-serif;font-weight:700;font-size:16px;marg
     </div>
   </div>
   <div class="hero">
-    <div class="client" id="clientBox"><span class="client-label">Cliente</span><select id="cliente" aria-label="Cliente"></select><button class="link-btn" id="nuevoCliente" type="button">Agregar cliente</button><button class="link-btn" id="renombrarCliente" type="button">Renombrar</button></div>
+    <div class="client" id="clientBox"><span class="client-label">Cliente</span><span class="client-name" id="clienteNombre">AWKI USA</span></div>
     <h1 id="heroTitle">Funnel de prospección</h1>
     <p id="heroSub">Gestión previa a deals en HubSpot: de la base de contactos a las reuniones, más la campaña de nutrición.</p>
   </div>
@@ -164,6 +165,7 @@ legend{font-family:"Franie",Arial,sans-serif;font-weight:700;font-size:16px;marg
     <button class="btn btn-primary" id="loginBtn" type="button">Enviar enlace de acceso</button>
     <div class="msg" id="loginMsg"></div>
   </div>
+  <div id="errorBox" class="demo-banner hidden" role="alert"><span id="errorText"></span></div>
   <div id="demoBanner" class="demo-banner hidden"><span>Estás viendo datos de ejemplo. No se guardan.</span><button class="btn" id="exitDemo" type="button">Salir del ejemplo</button></div>
 
   <div id="empty" class="empty hidden">
