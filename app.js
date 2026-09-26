@@ -157,10 +157,17 @@
   }
 
   // ---------------- Render ----------------
+  let view = "mes";
   function render() {
     const k = $("month").value, all = demo || store, d = all[k];
-    $("heroTitle").innerHTML = "Funnel de prospección<span>" + cap(label(k)) + "</span>";
     $("demoBanner").classList.toggle("hidden", !demo);
+    if (view === "comp") {
+      $("heroTitle").innerHTML = "Comparativo mensual<span>Hasta " + label(k) + "</span>";
+      $("empty").classList.add("hidden"); $("report").classList.add("hidden"); $("compare").classList.remove("hidden");
+      return renderCompare(all, k);
+    }
+    $("compare").classList.add("hidden");
+    $("heroTitle").innerHTML = "Funnel de prospección<span>" + cap(label(k)) + "</span>";
     if (!d) { $("empty").classList.remove("hidden"); $("report").classList.add("hidden"); return; }
     $("empty").classList.add("hidden"); $("report").classList.remove("hidden");
     const pd = all[prevKey(k)], m = metrics(d), pm = metrics(pd);
@@ -337,6 +344,197 @@
     $("insights").innerHTML = out.join("");
   }
 
+
+  // ---------------- Comparativo mensual ----------------
+  // tipo: "n" = volumen (cambio en %), "r" = tasa (cambio en pts), "x" = ratio (cambio en %). inv = menor es mejor
+  const CMP = [
+    { g: "Resultados" },
+    { k: "reuTot", l: "Reuniones totales", t: "n", f: (d) => (n(d.p_agendadas) ?? null) === null && n(d.n_reuniones) === null ? null : (n(d.p_agendadas) || 0) + (n(d.n_reuniones) || 0), spark: true },
+    { k: "global", l: "Contactado → reunión", t: "r", f: (d, m) => m.global, spark: true },
+    { k: "metaPct", l: "Cumplimiento de meta", t: "r", f: (d, m) => m.metaPct },
+    { g: "Prospección · volumen" },
+    { k: "p_base", l: "Contactos en la base", t: "n", f: (d) => n(d.p_base) },
+    { k: "p_descalificados", l: "Descalificados", t: "n", inv: true, f: (d) => n(d.p_descalificados) },
+    { k: "p_contactados", l: "Contactados", t: "n", f: (d) => n(d.p_contactados), spark: true },
+    { k: "p_emails", l: "Emails enviados", t: "n", f: (d) => n(d.p_emails) },
+    { k: "p_llamadas", l: "Llamadas realizadas", t: "n", f: (d) => n(d.p_llamadas) },
+    { k: "p_abiertos", l: "Emails abiertos", t: "n", f: (d) => n(d.p_abiertos) },
+    { k: "p_respondieron", l: "Respondieron", t: "n", f: (d) => n(d.p_respondieron) },
+    { k: "p_agendadas", l: "Reuniones agendadas", t: "n", f: (d) => n(d.p_agendadas) },
+    { k: "p_realizadas", l: "Reuniones realizadas", t: "n", f: (d) => n(d.p_realizadas) },
+    { g: "Prospección · tasas" },
+    { k: "descalif", l: "% descalificados", t: "r", inv: true, f: (d, m) => m.descalif, spark: true },
+    { k: "cobertura", l: "Cobertura base útil", t: "r", f: (d, m) => m.cobertura },
+    { k: "toquesXc", l: "Toques por contacto", t: "x", f: (d, m) => m.toquesXc },
+    { k: "apertura", l: "Apertura de emails", t: "r", f: (d, m) => m.apertura, spark: true },
+    { k: "conexion", l: "Llamadas conectadas", t: "r", f: (d, m) => m.conexion },
+    { k: "respuesta", l: "Respuesta sobre contactados", t: "r", f: (d, m) => m.respuesta, spark: true },
+    { k: "resp2reu", l: "Respuesta → reunión", t: "r", f: (d, m) => m.resp2reu },
+    { k: "asistencia", l: "Asistencia a reuniones", t: "r", f: (d, m) => m.asistencia },
+    { g: "Nutrición" },
+    { k: "n_enviados", l: "Emails enviados", t: "n", f: (d) => n(d.n_enviados) },
+    { k: "n_abiertos", l: "Emails abiertos", t: "n", f: (d) => n(d.n_abiertos) },
+    { k: "n_respuestas", l: "Respuestas", t: "n", f: (d) => n(d.n_respuestas) },
+    { k: "n_reuniones", l: "Reuniones", t: "n", f: (d) => n(d.n_reuniones), spark: true },
+    { k: "nApertura", l: "Apertura", t: "r", f: (d, m) => m.nApertura, spark: true },
+    { k: "nRespuesta", l: "Respuesta sobre enviados", t: "r", f: (d, m) => m.nRespuesta },
+    { k: "nResp2reu", l: "Respuesta → reunión", t: "r", f: (d, m) => m.nResp2reu },
+    { k: "nBaja", l: "Bajas", t: "r", inv: true, f: (d, m) => m.nBaja }
+  ];
+  const CMP_METRICS = CMP.filter((x) => x.k);
+  let cmpRange = 6, cmpMetric = "reuTot", cmpChart = null;
+
+  const fmtVal = (def, v) => v === null || v === undefined ? "—" : def.t === "r" ? pct(v) : def.t === "x" ? v.toFixed(1) : fmt(v);
+  function change(def, cur, prev) {
+    if (cur === null || prev === null || cur === undefined || prev === undefined) return null;
+    if (def.t === "r") return { v: (cur - prev) * 100, unit: " pts" };
+    if (!prev) return null;
+    return { v: ((cur - prev) / prev) * 100, unit: "%" };
+  }
+  function changeHtml(def, ch, cls) {
+    if (!ch) return `<span class="${cls} flat">—</span>`;
+    const flat = Math.abs(ch.v) < (def.t === "r" ? 0.05 : 0.5);
+    const good = (ch.v > 0) !== !!def.inv;
+    const arrow = flat ? "→" : ch.v > 0 ? "▲" : "▼";
+    const dec = def.t === "r" && Math.abs(ch.v) < 1 ? 2 : 1;
+    const num = ch.v.toFixed(dec);
+    if (Number(num) === 0) return `<span class="${cls} flat">→ sin cambio</span>`;
+    return `<span class="${cls} ${flat ? "flat" : good ? "up" : "down"}">${arrow} ${ch.v > 0 ? "+" : ""}${num}${ch.unit}</span>`;
+  }
+  function tone(def, ch) {
+    if (!ch || Math.abs(ch.v) < (def.t === "r" ? 0.05 : 0.5)) return "";
+    return ((ch.v > 0) !== !!def.inv) ? "pos" : "neg";
+  }
+  function sparkSvg(vals) {
+    const pts = vals.map((v, i) => [i, v]).filter((p) => p[1] !== null);
+    if (pts.length < 2) return "";
+    const W = 96, H = 34, ys = pts.map((p) => p[1]);
+    const min = Math.min(...ys), max = Math.max(...ys), span = max - min || 1, last = vals.length - 1 || 1;
+    const xy = pts.map(([i, v]) => [(i / last) * (W - 6) + 3, H - 3 - ((v - min) / span) * (H - 6)]);
+    const [lx, ly] = xy[xy.length - 1];
+    return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true"><polyline points="${xy.map((p) => p.join(",")).join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${lx}" cy="${ly}" r="3" fill="var(--accent)"/></svg>`;
+  }
+
+  function cmpSeries(all, keys) {
+    const out = {};
+    keys.forEach((k) => {
+      const d = all[k], m = metrics(d);
+      CMP_METRICS.forEach((def) => { (out[def.k] = out[def.k] || []).push(d ? def.f(d, m) : null); });
+    });
+    return out;
+  }
+
+  function renderCompare(all, endKey) {
+    const allKeys = Object.keys(all).filter((x) => x <= endKey).sort();
+    const keys = cmpRange ? allKeys.slice(-cmpRange) : allKeys;
+    const enough = keys.length >= 2;
+    $("cmpEmpty").classList.toggle("hidden", enough);
+    $("cmpBody").classList.toggle("hidden", !enough);
+    if (!enough) return;
+    // mes previo al primero del rango para calcular su cambio
+    const prevOfFirst = allKeys[allKeys.indexOf(keys[0]) - 1];
+    const series = cmpSeries(all, keys);
+    const prevSeries = prevOfFirst ? cmpSeries(all, [prevOfFirst]) : null;
+    $("cmpRangeLabel").textContent = `${cap(label(keys[0]))} – ${label(keys[keys.length - 1])} · ${keys.length} meses`;
+
+    // Tarjetas
+    $("sparks").innerHTML = CMP_METRICS.filter((d) => d.spark).map((def) => {
+      const s = series[def.k], cur = s[s.length - 1], prev = s[s.length - 2];
+      return `<button type="button" class="spark ${def.k === cmpMetric ? "sel" : ""}" data-k="${def.k}">
+        <span class="t">${def.l}</span>
+        <span class="row"><span class="v">${fmtVal(def, cur)}</span>${sparkSvg(s)}</span>
+        ${changeHtml(def, change(def, cur, prev), "d")}</button>`;
+    }).join("");
+    $("sparks").querySelectorAll(".spark").forEach((b) => { b.onclick = () => { cmpMetric = b.dataset.k; $("metricSel").value = cmpMetric; renderCompare(all, endKey); }; });
+
+    // Selector y gráfico
+    const sel = $("metricSel");
+    if (!sel.options.length) {
+      let html = "", open = false;
+      CMP.forEach((x) => {
+        if (x.g) { html += (open ? "</optgroup>" : "") + `<optgroup label="${x.g}">`; open = true; }
+        else html += `<option value="${x.k}">${x.l}</option>`;
+      });
+      sel.innerHTML = html + "</optgroup>";
+      sel.onchange = () => { cmpMetric = sel.value; renderCompare(demo || store, $("month").value); };
+    }
+    sel.value = cmpMetric;
+    drawCmpChart(CMP_METRICS.find((d) => d.k === cmpMetric), keys, series[cmpMetric]);
+
+    // Tabla
+    let html = `<thead><tr><th>Indicador</th>${keys.map((k) => `<th>${cap(short(k))}</th>`).join("")}</tr></thead><tbody>`;
+    CMP.forEach((x) => {
+      if (x.g) { html += `<tr class="grp"><td colspan="${keys.length + 1}">${x.g}</td></tr>`; return; }
+      const s = series[x.k];
+      html += `<tr><td>${x.l}</td>` + s.map((v, i) => {
+        const prev = i > 0 ? s[i - 1] : prevSeries ? prevSeries[x.k][0] : null;
+        const ch = change(x, v, prev);
+        return `<td class="${tone(x, ch)}"><span class="cv">${fmtVal(x, v)}</span>${i > 0 || prevSeries ? changeHtml(x, ch, "cd") : ""}</td>`;
+      }).join("") + `</tr>`;
+    });
+    $("cmpTable").innerHTML = html + "</tbody>";
+    $("exportCsv").onclick = () => exportCsv(keys, series);
+  }
+
+  function drawCmpChart(def, keys, vals) {
+    if (!window.Chart) return;
+    const ink = css("--ink"), muted = css("--muted"), line = css("--line");
+    const isRate = def.t === "r";
+    const data = vals.map((v) => v === null ? null : isRate ? +(v * 100).toFixed(2) : +v.toFixed(def.t === "x" ? 1 : 0));
+    const colors = vals.map((v, i) => {
+      if (i === 0 || v === null || vals[i - 1] === null) return muted;
+      const up = v > vals[i - 1]; if (v === vals[i - 1]) return muted;
+      return (up !== !!def.inv) ? css("--good") : "#C8002D";
+    });
+    if (cmpChart) cmpChart.destroy();
+    cmpChart = new Chart($("cmpChart"), {
+      type: isRate ? "line" : "bar",
+      data: { labels: keys.map((k) => cap(short(k))), datasets: [{
+        label: def.l, data,
+        backgroundColor: isRate ? "#C8002D" : colors, borderColor: "#C8002D",
+        pointBackgroundColor: colors, pointBorderColor: colors, pointRadius: 6, tension: .3, borderRadius: 4, spanGaps: true
+      }] },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false },
+          tooltip: { callbacks: { label: (c) => {
+            const i = c.dataIndex, v = vals[i], ch = i > 0 ? change(def, v, vals[i - 1]) : null;
+            return `${def.l}: ${fmtVal(def, v)}` + (ch ? ` (${ch.v > 0 ? "+" : ""}${ch.v.toFixed(1)}${ch.unit} vs mes ant.)` : "");
+          } } } },
+        scales: { x: { ticks: { color: muted }, grid: { display: false } },
+          y: { beginAtZero: true, ticks: { color: muted, callback: (v) => isRate ? v + "%" : v }, grid: { color: line } } } }
+    });
+  }
+
+  function exportCsv(keys, series) {
+    const esc = (s) => `"${String(s).replace(/"/g, '""')}"`;
+    const rows = [["Indicador", ...keys].map(esc).join(",")];
+    CMP_METRICS.forEach((def) => {
+      rows.push([esc(def.l), ...series[def.k].map((v) => v === null ? "" : def.t === "r" ? (v * 100).toFixed(2) : def.t === "x" ? v.toFixed(2) : v)].join(","));
+    });
+    const blob = new Blob(["\ufeff" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `comparativo-${CLIENT_NAME.replace(/\s+/g, "-").toLowerCase()}-${keys[0]}_${keys[keys.length - 1]}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  document.querySelectorAll(".seg button").forEach((b) => {
+    b.onclick = () => {
+      cmpRange = Number(b.dataset.range);
+      document.querySelectorAll(".seg button").forEach((x) => x.classList.toggle("on", x === b));
+      render();
+    };
+  });
+  function setView(v) {
+    view = v;
+    $("tabMes").classList.toggle("active", v === "mes"); $("tabMes").setAttribute("aria-selected", v === "mes");
+    $("tabComp").classList.toggle("active", v === "comp"); $("tabComp").setAttribute("aria-selected", v === "comp");
+    render();
+  }
+  $("tabMes").onclick = () => setView("mes");
+  $("tabComp").onclick = () => setView("comp");
+
   // ---------------- Formulario ----------------
   function openDrawer() {
     if (!clienteId) { toast("El cliente no está disponible. Revisa el aviso en pantalla."); return; }
@@ -380,11 +578,9 @@
   // ---------------- Ejemplo ----------------
   $("demoBtn").onclick = () => {
     const k = $("month").value, out = {};
-    const rows = [
-      [4200, 520, 980, 2900, 610, 64, 1015, 41, 14, 11, 15, 3800, 1060, 95, 38, 9, 14],
-      [4350, 560, 1120, 3350, 720, 79, 1180, 52, 17, 13, 18, 3900, 1130, 110, 44, 11, 12],
-      [4500, 610, 1260, 3700, 880, 98, 1290, 63, 21, 17, 20, 4100, 1170, 121, 49, 12, 21]
-    ];
+    const base = [4500, 610, 1260, 3700, 880, 98, 1290, 63, 21, 17, 20, 4100, 1170, 121, 49, 12, 21];
+    const f = [0.78, 0.86, 0.9, 0.95, 0.97, 1];
+    const rows = f.map((x, i) => base.map((v, j) => Math.round(v * (j === 0 || j === 10 ? 0.9 + i * 0.02 : x) * (j === 6 && i === 3 ? 0.9 : 1))));
     rows.forEach((row, i) => {
       let kk = k; for (let j = 0; j < rows.length - 1 - i; j++) kk = prevKey(kk);
       const o = {}; FIELDS.forEach((f, idx) => { o[f] = row[idx]; }); out[kk] = o;

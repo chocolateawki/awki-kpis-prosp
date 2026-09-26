@@ -120,6 +120,37 @@ legend{font-family:"Franie",Arial,sans-serif;font-weight:700;font-size:16px;marg
 .drawer footer{padding:14px 22px;border-top:1px solid var(--line);display:flex;gap:10px;justify-content:space-between;align-items:center}
 .drawer footer .btn-ghost{color:var(--ink);border-color:var(--line)}
 .save-state{font-size:13px;color:var(--muted)}
+
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:28px;overflow-x:auto}
+.tab{background:none;border:0;padding:12px 16px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.tab.active{color:var(--ink);border-bottom-color:var(--accent)}
+.cmp-controls{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:28px}
+.seg{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:3px}
+.seg button{background:none;border:0;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:14px;color:var(--muted)}
+.seg button.on{background:var(--ink);color:var(--bg)}
+.btn-outline{background:var(--surface);border:1px solid var(--line);color:var(--ink)}
+.spark-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(230px,45%),1fr));gap:12px}
+@media (max-width:560px){.spark svg{display:none}.spark .v{font-size:20px}}
+.spark{background:var(--surface);border-radius:10px;padding:16px 18px;cursor:pointer;border:2px solid transparent;text-align:left;width:100%}
+.spark:hover,.spark.sel{border-color:var(--accent)}
+.spark .t{font-size:13px;color:var(--muted);display:block}
+.spark .row{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;margin-top:6px}
+.spark .v{font-family:"Franie",Arial,sans-serif;font-weight:700;font-size:24px;line-height:1.1}
+.spark svg{flex:none}
+.spark .d{font-size:13px;font-weight:600;display:block;margin-top:4px}
+.metric-pick{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted)}
+.metric-pick select{padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink)}
+.table-scroll{overflow-x:auto;padding:0}
+.cmp-table{border-collapse:collapse;font-size:14px;min-width:100%}
+.cmp-table th,.cmp-table td{padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:right}
+.cmp-table th{font-size:13px;color:var(--muted);font-weight:600;background:var(--surface);position:sticky;top:0}
+.cmp-table th:first-child,.cmp-table td:first-child{text-align:left;position:sticky;left:0;background:var(--surface);z-index:1}
+.cmp-table tr.grp td{font-family:"Franie",Arial,sans-serif;font-weight:700;color:var(--ink);background:var(--bg);padding-top:14px}
+.cmp-table tr.grp td:first-child{background:var(--bg)}
+.cmp-table .cv{font-weight:700;display:block}
+.cmp-table .cd{font-size:12px;font-weight:600}
+.cmp-table td.pos{background:color-mix(in srgb,var(--good) 10%,var(--surface))}
+.cmp-table td.neg{background:color-mix(in srgb,var(--bad) 10%,var(--surface))}
 .hidden{display:none!important}
 .client{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
 .client-label{font-size:14px;color:#D0D0D0}
@@ -156,6 +187,10 @@ legend{font-family:"Franie",Arial,sans-serif;font-weight:700;font-size:16px;marg
 </header>
 
 <main>
+  <nav class="tabs" role="tablist" aria-label="Vistas">
+    <button class="tab active" id="tabMes" role="tab" aria-selected="true" type="button">Reporte del mes</button>
+    <button class="tab" id="tabComp" role="tab" aria-selected="false" type="button">Comparativo mensual</button>
+  </nav>
   <div id="errorBox" class="demo-banner hidden" role="alert"><span id="errorText"></span></div>
   <div id="demoBanner" class="demo-banner hidden"><span>Estás viendo datos de ejemplo. No se guardan.</span><button class="btn" id="exitDemo" type="button">Salir del ejemplo</button></div>
 
@@ -198,6 +233,35 @@ legend{font-family:"Franie",Arial,sans-serif;font-weight:700;font-size:16px;marg
       <ul class="insights" id="insights"></ul>
       <p class="notice">Las referencias son rangos generales de outbound B2B; ajústalas a tu industria y ticket.</p>
     </section>
+  </div>
+
+  <div id="compare" class="hidden">
+    <div class="cmp-controls">
+      <div class="seg" role="group" aria-label="Rango">
+        <button type="button" data-range="3">3 meses</button>
+        <button type="button" data-range="6" class="on">6 meses</button>
+        <button type="button" data-range="12">12 meses</button>
+        <button type="button" data-range="0">Todo</button>
+      </div>
+      <button class="btn btn-outline" id="exportCsv" type="button">Exportar CSV</button>
+    </div>
+    <div id="cmpEmpty" class="empty hidden"><h2>Necesitas al menos 2 meses con datos</h2><p>Carga las métricas de otro mes para ver cómo cambian mes a mes.</p></div>
+    <div id="cmpBody">
+      <section>
+        <div class="sec-head"><h2>Resumen de cambios</h2><span id="cmpRangeLabel"></span></div>
+        <div class="spark-grid" id="sparks"></div>
+      </section>
+      <section>
+        <div class="sec-head"><h2>Detalle por indicador</h2>
+          <label class="metric-pick"><span>Indicador</span><select id="metricSel"></select></label>
+        </div>
+        <div class="panel"><div class="chart-box"><canvas id="cmpChart" aria-label="Evolución del indicador seleccionado"></canvas></div></div>
+      </section>
+      <section>
+        <div class="sec-head"><h2>Tabla mes a mes</h2><span>Valor del mes y cambio contra el mes anterior</span></div>
+        <div class="panel table-scroll"><table class="cmp-table" id="cmpTable"></table></div>
+      </section>
+    </div>
   </div>
 </main>
 
