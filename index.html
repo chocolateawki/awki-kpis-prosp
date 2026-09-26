@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Funnel de prospección y nutrición · DANO Miami</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<style>
+@font-face{font-family:"Franie";src:url("assets/fonts/Franie-Bold.ttf") format("truetype");font-weight:700;font-display:swap}
+@font-face{font-family:"Franie";src:url("assets/fonts/Franie-Regular.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Acumin";src:url("assets/fonts/AcuminVariableConcept.otf") format("opentype");font-weight:100 900;font-display:swap}
+:root{
+  --accent:#C8002D;--black:#000;--white:#FFF;
+  --bg:#F3F3F3;--surface:#FFFFFF;--ink:#000;--muted:#6E6E6E;--line:#E0E0E0;--track:#EBEBEB;
+  --good:#1F7A4D;--warn:#B7791F;--bad:#C8002D;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000;--surface:#141414;--ink:#FFFFFF;--muted:#A8A8A8;--line:#2E2E2E;--track:#262626;--good:#5FC48F;--warn:#E3B04B}}
+:root[data-theme="dark"]{--bg:#000;--surface:#141414;--ink:#FFFFFF;--muted:#A8A8A8;--line:#2E2E2E;--track:#262626;--good:#5FC48F;--warn:#E3B04B}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Acumin","Helvetica Neue",Arial,sans-serif;font-size:16px;line-height:1.5}
+h1,h2,h3{font-family:"Franie","Helvetica Neue",Arial,sans-serif;font-weight:700;margin:0;line-height:1.15}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* Header */
+.top{background:#000 url("assets/fondo.jpg") center top/cover no-repeat;color:#fff;padding:22px clamp(16px,4vw,48px) 44px;position:relative;min-height:320px}
+.top::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.85) 0%,rgba(0,0,0,.55) 55%,rgba(0,0,0,.2) 100%)}
+.top>*{position:relative}
+.top-row{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;max-width:1200px;margin:0 auto}
+.logo{height:44px;width:auto;display:block}
+.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.month{background:#141414;border:1px solid #333;color:#fff;border-radius:6px;padding:8px 10px;color-scheme:dark}
+.btn{border:0;border-radius:6px;padding:9px 16px;cursor:pointer;font-weight:600}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-ghost{background:transparent;color:#fff;border:1px solid #444}
+.btn-ghost:hover{border-color:#fff}
+.hero{max-width:1200px;margin:56px auto 0}
+.hero h1{font-size:clamp(28px,4.2vw,46px);letter-spacing:-.01em}
+.hero h1 span{display:block;color:#fff;opacity:.75;font-size:.6em;margin-top:6px;font-weight:400}
+.hero p{color:#D0D0D0;margin:10px 0 0;max-width:60ch}
+
+main{max-width:1200px;margin:0 auto;padding:28px clamp(16px,4vw,48px) 64px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:36px}
+.kpi{background:var(--surface);padding:18px 20px}
+.kpi .v{font-family:"Franie",Arial,sans-serif;font-weight:700;font-size:30px;line-height:1.1}
+.kpi .l{color:var(--muted);font-size:14px}
+.delta{font-size:13px;font-weight:600;margin-left:6px}
+.up{color:var(--good)}.down{color:var(--bad)}.flat{color:var(--muted)}
+
+section{margin-bottom:44px}
+.sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px;border-bottom:2px solid var(--ink);padding-bottom:10px}
+.sec-head h2{font-size:24px}
+.sec-head span{color:var(--muted);font-size:14px}
+.panel{background:var(--surface);border-radius:10px;padding:clamp(16px,2.5vw,28px)}
+.split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:28px;align-items:start}
+@media (max-width:860px){.split{grid-template-columns:1fr}}
+
+/* Funnel */
+.funnel{display:flex;flex-direction:column;gap:0}
+.stage{display:grid;grid-template-columns:150px 1fr 90px;align-items:center;gap:14px}
+.stage .name{font-size:14px;line-height:1.25}
+.stage .name small{display:block;color:var(--muted);font-size:12px}
+.bar-wrap{display:flex;justify-content:center}
+.bar{height:42px;border-radius:4px;background:var(--accent);display:flex;overflow:hidden;min-width:14px;transform-origin:center;animation:grow .7s cubic-bezier(.2,.7,.2,1) both}
+.bar.activity{background:transparent;border:2px dashed var(--ink)}
+.bar .seg{height:100%}
+.stage .num{font-family:"Franie",Arial,sans-serif;font-weight:700;font-size:20px;text-align:right}
+.step{display:grid;grid-template-columns:150px 1fr 90px;gap:14px;height:30px;align-items:center}
+.chip{justify-self:center;font-size:12.5px;font-weight:600;padding:2px 10px;border-radius:999px;background:var(--track);color:var(--ink)}
+.chip.bad{background:var(--accent);color:#fff}
+@keyframes grow{from{transform:scaleX(.05);opacity:.3}to{transform:scaleX(1);opacity:1}}
+@media (prefers-reduced-motion:reduce){.bar{animation:none}}
+@media (max-width:560px){.stage,.step{grid-template-columns:96px 1fr 64px;gap:8px}.stage .num{font-size:16px}}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:14px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:2px;vertical-align:-1px;margin-right:6px}
+
+/* Rates table */
+.rates{width:100%;border-collapse:collapse;font-size:14.5px}
+.rates th{text-align:left;font-weight:600;color:var(--muted);font-size:13px;padding:0 0 8px;border-bottom:1px solid var(--line)}
+.rates td{padding:10px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.rates td:nth-child(2),.rates th:nth-child(2){text-align:right;font-weight:700;white-space:nowrap;padding-left:10px}
+.rates td:nth-child(3),.rates th:nth-child(3){text-align:right;white-space:nowrap;padding-left:10px}
+.rates .ref{display:block;color:var(--muted);font-size:12px;font-weight:400}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:0}
+.dot.good{background:var(--good)}.dot.warn{background:var(--warn)}.dot.bad{background:var(--bad)}.dot.na{background:var(--line)}
+
+.chart-box{position:relative;height:320px}
+.insights{display:grid;gap:12px;padding:0;margin:0;list-style:none}
+.insights li{background:var(--surface);border-left:4px solid var(--ink);padding:14px 18px;border-radius:0 8px 8px 0}
+.insights li.bad{border-left-color:var(--accent)}
+.insights li.good{border-left-color:var(--good)}
+.insights b{font-weight:700}
+.empty{background:var(--surface);border-radius:10px;padding:40px 24px;text-align:center}
+.empty h2{font-size:24px;margin-bottom:8px}
+.empty p{color:var(--muted);margin:0 auto 20px;max-width:48ch}
+.empty .btn-ghost{color:var(--ink);border-color:var(--line)}
+.notice{font-size:13px;color:var(--muted);margin-top:8px}
+.demo-banner{background:var(--accent);color:#fff;padding:10px 16px;border-radius:8px;margin-bottom:24px;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+.demo-banner button{background:#fff;color:#000}
+
+/* Drawer */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .2s}
+.scrim.open{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;height:100%;width:min(460px,100%);background:var(--bg);transform:translateX(100%);transition:transform .25s ease;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);z-index:10}
+.drawer.open{transform:none}
+.drawer header{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.drawer header h2{font-size:20px}
+.close{background:none;border:0;font-size:26px;cursor:pointer;line-height:1;color:var(--ink)}
+.drawer form{overflow:auto;padding:18px 22px;flex:1}
+fieldset{border:0;padding:0;margin:0 0 22px}
+legend{font-family:"Franie",Arial,sans-serif;font-weight:700;font-size:16px;margin-bottom:10px}
+.field{display:grid;grid-template-columns:1fr 120px;gap:10px;align-items:center;padding:6px 0}
+.field label{font-size:14px;line-height:1.25}
+.field label small{display:block;color:var(--muted);font-size:12px}
+.field input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);text-align:right}
+.drawer footer{padding:14px 22px;border-top:1px solid var(--line);display:flex;gap:10px;justify-content:space-between;align-items:center}
+.drawer footer .btn-ghost{color:var(--ink);border-color:var(--line)}
+.save-state{font-size:13px;color:var(--muted)}
+.hidden{display:none!important}
+.client{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.client-label{font-size:14px;color:#D0D0D0}
+.client select{background:transparent;border:0;border-bottom:1px solid rgba(255,255,255,.4);color:#fff;font-family:"Franie",Arial,sans-serif;font-weight:700;font-size:20px;padding:2px 24px 2px 0;cursor:pointer;color-scheme:dark;max-width:100%}
+.client select option{background:#141414;color:#fff}
+.link-btn{background:none;border:0;color:#fff;text-decoration:underline;text-underline-offset:3px;cursor:pointer;font-size:14px;padding:4px}
+.mode{font-size:12px;color:#D0D0D0;border:1px solid rgba(255,255,255,.3);border-radius:999px;padding:3px 10px}
+.login{max-width:420px;margin:40px auto;background:var(--surface);border-radius:10px;padding:28px}
+.login h2{font-size:22px;margin-bottom:6px}
+.login p{color:var(--muted);margin:0 0 18px;font-size:15px}
+.login input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--bg);margin-bottom:12px}
+.login .btn{width:100%}
+.login .msg{margin-top:12px;font-size:14px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#000;color:#fff;padding:10px 18px;border-radius:8px;font-size:14px;z-index:20}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-row">
+    <img class="logo" alt="DANO Miami" src="assets/logo-dano-miami.png">
+    <div class="controls">
+      <label for="month" class="sr" style="position:absolute;left:-9999px">Mes</label>
+      <input id="month" class="month" type="month">
+      <span class="mode" id="modeTag"></span>
+      <button class="btn btn-primary" id="openEdit" type="button">Ingresar métricas</button>
+      <button class="btn btn-ghost hidden" id="logout" type="button">Cerrar sesión</button>
+    </div>
+  </div>
+  <div class="hero">
+    <div class="client" id="clientBox"><span class="client-label">Cliente</span><select id="cliente" aria-label="Cliente"></select><button class="link-btn" id="nuevoCliente" type="button">Agregar cliente</button><button class="link-btn" id="renombrarCliente" type="button">Renombrar</button></div>
+    <h1 id="heroTitle">Funnel de prospección</h1>
+    <p id="heroSub">Gestión previa a deals en HubSpot: de la base de contactos a las reuniones, más la campaña de nutrición.</p>
+  </div>
+</header>
+
+<main>
+  <div id="login" class="login hidden">
+    <h2>Inicia sesión</h2>
+    <p>Te enviaremos un enlace de acceso a tu email. Solo los emails autorizados ven los datos.</p>
+    <label for="loginEmail" style="position:absolute;left:-9999px">Email</label>
+    <input id="loginEmail" type="email" placeholder="tu@empresa.com" autocomplete="email">
+    <button class="btn btn-primary" id="loginBtn" type="button">Enviar enlace de acceso</button>
+    <div class="msg" id="loginMsg"></div>
+  </div>
+  <div id="demoBanner" class="demo-banner hidden"><span>Estás viendo datos de ejemplo. No se guardan.</span><button class="btn" id="exitDemo" type="button">Salir del ejemplo</button></div>
+
+  <div id="empty" class="empty hidden">
+    <h2>Aún no hay métricas para este mes</h2>
+    <p>Ingresa los números del mes desde HubSpot para ver el funnel, las tasas de conversión y la lectura automática.</p>
+    <button class="btn btn-primary" id="emptyEdit" type="button">Ingresar métricas</button>
+    <button class="btn btn-ghost" id="demoBtn" type="button">Ver con datos de ejemplo</button>
+  </div>
+
+  <div id="report" class="hidden">
+    <div class="kpis" id="kpis"></div>
+
+    <section>
+      <div class="sec-head"><h2>Funnel de prospección</h2><span>Conversión entre etapas y volumen de actividad</span></div>
+      <div class="split">
+        <div class="panel">
+          <div class="funnel" id="funnelP"></div>
+          <div class="legend"><span><i style="background:var(--accent)"></i>Contactos</span><span><i style="background:var(--muted)"></i>Descalificados</span><span><i style="background:var(--ink)"></i>Llamadas</span><span><i style="border:2px dashed var(--ink)"></i>Actividad (emails + llamadas)</span></div>
+        </div>
+        <div class="panel"><table class="rates" id="ratesP"></table></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><h2>Campaña de nutrición</h2><span>Secuencias automatizadas sobre la base</span></div>
+      <div class="split">
+        <div class="panel"><div class="funnel" id="funnelN"></div></div>
+        <div class="panel"><table class="rates" id="ratesN"></table></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><h2>Evolución mensual</h2><span>Últimos 6 meses con datos</span></div>
+      <div class="panel"><div class="chart-box"><canvas id="trend" aria-label="Evolución mensual de reuniones y tasas"></canvas></div></div>
+    </section>
+
+    <section>
+      <div class="sec-head"><h2>Lectura del mes</h2><span>Diagnóstico automático contra referencias B2B</span></div>
+      <ul class="insights" id="insights"></ul>
+      <p class="notice">Las referencias son rangos generales de outbound B2B; ajústalas a tu industria y ticket.</p>
+    </section>
+  </div>
+</main>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true" aria-labelledby="drawerTitle">
+  <header><h2 id="drawerTitle">Métricas del mes</h2><button class="close" id="closeEdit" type="button" aria-label="Cerrar">×</button></header>
+  <form id="form" autocomplete="off">
+    <fieldset>
+      <legend>Prospección</legend>
+      <div class="field"><label for="p_base">Contactos en la base</label><input id="p_base" type="number" min="0" inputmode="numeric"></div>
+      <div class="field"><label for="p_descalificados">Contactos descalificados<small>No cumplen el perfil o datos inválidos</small></label><input id="p_descalificados" type="number" min="0" inputmode="numeric"></div>
+      <div class="field"><label for="p_contactados">Contactos contactados<small>Únicos, al menos un toque</small></label><input id="p_contactados" type="number" min="0" inputmode="numeric"></div>
+      <div class="field"><label for="p_emails">Emails enviados</label><input id="p_emails" type="number" min="0" inputmode="numeric"></div>
+      <div class="field"><label for="p_llamadas">Llamadas realizadas</label><input id="p_llamadas" type="number" min="0" inputmode="numeric"></div>
+      <div class="field"><label for="p_conectadas">Llamadas conectadas<small>Opcional: hablaste con la persona</small></label><input id="p_conectadas" type="number" min="0" inputmode="numeric"></div>
+      <div class="field"><label for="p_abiertos">Emails abiertos</label><input id="p_abiertos" type="number" min="0" inputmode="numeric"></div>
+      <div class="field"><label for="p_respondieron">Contactos que respondieron</label><input id="p_respondieron" type="number" min="0" inputmode="numeric"></div>
+      <div class="field"><label for="p_agendadas">Reuniones agendadas</label><input id="p_agendadas" type="number" min="0" inputmode="numeric"></div>
+      <div class="field"><label for="p_realizadas">Reuniones realizadas<small>Opcional: para medir asistencia</small></label><input id="p_realizadas" type="number" min="0" inputmode="numeric"></div>
+      <div class="field"><label for="p_meta">Meta de reuniones<small>Opcional</small></label><input id="p_meta" type="number" min="0" inputmode="numeric"></div>
+    </fieldset>
+    <fieldset>
+      <legend>Nutrición</legend>
+      <div class="field"><label for="n_enviados">Emails enviados</label><input id="n_enviados" type="number" min="0" inputmode="numeric"></div>
+      <div class="field"><label for="n_abiertos">Emails abiertos</label><input id="n_abiertos" type="number" min="0" inputmode="numeric"></div>
+      <div class="field"><label for="n_clics">Clics<small>Opcional</small></label><input id="n_clics" type="number" min="0" inputmode="numeric"></div>
+      <div class="field"><label for="n_respuestas">Respuestas</label><input id="n_respuestas" type="number" min="0" inputmode="numeric"></div>
+      <div class="field"><label for="n_reuniones">Reuniones</label><input id="n_reuniones" type="number" min="0" inputmode="numeric"></div>
+      <div class="field"><label for="n_bajas">Bajas (unsubscribes)<small>Opcional</small></label><input id="n_bajas" type="number" min="0" inputmode="numeric"></div>
+    </fieldset>
+  </form>
+  <footer><span class="save-state" id="saveState"></span><div style="display:flex;gap:10px"><button class="btn btn-ghost" id="cancelEdit" type="button">Cancelar</button><button class="btn btn-primary" id="saveBtn" type="button">Guardar mes</button></div></footer>
+</aside>
+
+<script src="app.js"></script>
+</body>
+</html>
