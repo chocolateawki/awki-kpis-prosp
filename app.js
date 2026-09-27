@@ -86,18 +86,54 @@
   }
   function errMsg(e) {
     const m = (e && (e.message || e.error_description)) || "Error desconocido";
-    if (/row-level security|permission denied/i.test(m)) return "Supabase rechazó la operación (permisos RLS).";
+    if (/row-level security|permission denied/i.test(m)) return isAdmin ? "Tu usuario no tiene permiso de edición (revisa usuarios_permitidos)." : "Solo el administrador puede editar.";
     if (/duplicate key/i.test(m)) return "Ese cliente ya existe.";
     return m;
   }
 
-  async function start() { boot(); }
+  // ---------------- Roles: cliente (solo lectura) / administrador ----------------
+  let isAdmin = !hasSupabase;   // sin Supabase (modo local) se puede editar
+  function applyRole() {
+    document.body.classList.toggle("is-admin", isAdmin);
+    $("emptyTitle").textContent = isAdmin ? "Aún no hay métricas para este mes" : "Aún no hay métricas publicadas para este mes";
+    $("emptyText").textContent = isAdmin
+      ? "Ingresa los números del mes desde HubSpot para ver el funnel, las tasas de conversión y la lectura automática."
+      : "Selecciona otro mes en el encabezado.";
+    if (!isAdmin) { closeDrawer(); if (demo) { demo = null; render(); } }
+  }
+  async function start() {
+    if (hasSupabase) {
+      try {
+        const { data } = await sb.auth.getSession();
+        isAdmin = !!(data && data.session);
+      } catch (e) { isAdmin = false; }
+      sb.auth.onAuthStateChange((event, session) => {
+        isAdmin = !!session; applyRole();
+        if (session) $("adminLogin").classList.add("hidden");
+      });
+      if (new URLSearchParams(location.search).has("admin") && !isAdmin) $("adminLogin").classList.remove("hidden");
+    }
+    applyRole();
+    boot();
+  }
+  $("adminBtn").onclick = async () => {
+    const email = $("adminEmail").value.trim(), password = $("adminPass").value;
+    if (!email || !password) { $("adminMsg").textContent = "Escribe email y contraseña."; return; }
+    $("adminBtn").disabled = true; $("adminMsg").textContent = "Entrando…";
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    $("adminBtn").disabled = false;
+    if (error) { $("adminMsg").textContent = "No se pudo entrar: " + error.message; return; }
+    $("adminMsg").textContent = ""; $("adminPass").value = "";
+    history.replaceState(null, "", location.pathname);
+    toast("Sesión de administrador iniciada");
+  };
+  $("adminPass").addEventListener("keydown", (e) => { if (e.key === "Enter") $("adminBtn").click(); });
+  $("logout").onclick = async () => { if (sb) await sb.auth.signOut(); isAdmin = false; applyRole(); toast("Sesión cerrada"); };
 
   let booted = false;
   function showError(msg) { $("errorText").textContent = msg; $("errorBox").classList.remove("hidden"); }
   async function boot() {
     $("clientBox").classList.remove("hidden");
-    $("openEdit").classList.remove("hidden");
     $("clienteNombre").textContent = CLIENT_NAME;
     document.title = "Funnel · " + CLIENT_NAME;
     if (booted) return; booted = true;
@@ -537,6 +573,7 @@
 
   // ---------------- Formulario ----------------
   function openDrawer() {
+    if (!isAdmin) return;
     if (!clienteId) { toast("El cliente no está disponible. Revisa el aviso en pantalla."); return; }
     demo = null;
     const d = store[$("month").value] || {};

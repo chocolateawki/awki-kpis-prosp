@@ -157,6 +157,7 @@ legend{font-family:"Franie",Arial,sans-serif;font-weight:700;font-size:16px;marg
 .cmp-table td.pos{background:color-mix(in srgb,var(--good) 10%,var(--surface))}
 .cmp-table td.neg{background:color-mix(in srgb,var(--bad) 10%,var(--surface))}
 .hidden{display:none!important}
+body:not(.is-admin) .admin-only{display:none!important}
 .client{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
 .client-label{font-size:14px;color:#D0D0D0}
 .client-name{font-family:"Franie",Arial,sans-serif;font-weight:700;font-size:20px;color:#fff}
@@ -180,8 +181,9 @@ legend{font-family:"Franie",Arial,sans-serif;font-weight:700;font-size:16px;marg
     <div class="controls">
       <label for="month" class="sr" style="position:absolute;left:-9999px">Mes</label>
       <input id="month" class="month" type="month">
-      <span class="mode" id="modeTag"></span>
-      <button class="btn btn-primary" id="openEdit" type="button">Ingresar métricas</button>
+      <span class="mode admin-only" id="modeTag"></span>
+      <button class="btn btn-primary admin-only" id="openEdit" type="button">Ingresar métricas</button>
+      <button class="btn btn-ghost admin-only" id="logout" type="button">Cerrar sesión</button>
     </div>
   </div>
   <div class="hero">
@@ -192,6 +194,16 @@ legend{font-family:"Franie",Arial,sans-serif;font-weight:700;font-size:16px;marg
 </header>
 
 <main>
+  <div id="adminLogin" class="login hidden">
+    <h2>Acceso de administrador</h2>
+    <p>Solo para cargar y editar métricas. El cliente ve el reporte sin iniciar sesión.</p>
+    <label for="adminEmail" style="position:absolute;left:-9999px">Email</label>
+    <input id="adminEmail" type="email" placeholder="tu@empresa.com" autocomplete="username">
+    <label for="adminPass" style="position:absolute;left:-9999px">Contraseña</label>
+    <input id="adminPass" type="password" placeholder="Contraseña" autocomplete="current-password">
+    <button class="btn btn-primary" id="adminBtn" type="button">Entrar</button>
+    <div class="msg" id="adminMsg"></div>
+  </div>
   <nav class="tabs" role="tablist" aria-label="Vistas">
     <button class="tab active" id="tabMes" role="tab" aria-selected="true" type="button">Reporte del mes</button>
     <button class="tab" id="tabComp" role="tab" aria-selected="false" type="button">Comparativo mensual</button>
@@ -200,10 +212,10 @@ legend{font-family:"Franie",Arial,sans-serif;font-weight:700;font-size:16px;marg
   <div id="demoBanner" class="demo-banner hidden"><span>Estás viendo datos de ejemplo. No se guardan.</span><button class="btn" id="exitDemo" type="button">Salir del ejemplo</button></div>
 
   <div id="empty" class="empty hidden">
-    <h2>Aún no hay métricas para este mes</h2>
-    <p>Ingresa los números del mes desde HubSpot para ver el funnel, las tasas de conversión y la lectura automática.</p>
-    <button class="btn btn-primary" id="emptyEdit" type="button">Ingresar métricas</button>
-    <button class="btn btn-ghost" id="demoBtn" type="button">Ver con datos de ejemplo</button>
+    <h2 id="emptyTitle">Aún no hay métricas para este mes</h2>
+    <p id="emptyText">Selecciona otro mes en el encabezado.</p>
+    <button class="btn btn-primary admin-only" id="emptyEdit" type="button">Ingresar métricas</button>
+    <button class="btn btn-ghost admin-only" id="demoBtn" type="button">Ver con datos de ejemplo</button>
   </div>
 
   <div id="report" class="hidden">
